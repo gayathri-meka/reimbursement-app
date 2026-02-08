@@ -70,5 +70,14 @@ export async function uploadFile(
   if (isSupabaseConfigured()) {
     return uploadToSupabase(file, fileName, contentType);
   }
+
+  // Vercel has a read-only filesystem — local uploads won't work in production
+  if (process.env.VERCEL) {
+    throw new Error(
+      "Supabase Storage must be configured for production deployments. " +
+      "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables."
+    );
+  }
+
   return uploadToLocal(file, fileName);
 }
