@@ -1,8 +1,6 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
-import os from "os";
 
 function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -16,37 +14,65 @@ export interface ExtractedExpense {
 }
 
 /**
- * Convert a PDF file to PNG images (one per page) using pdftoppm.
- * Returns an array of temporary PNG file paths.
+ * Check if a URL or path points to a PDF based on the extension.
  */
-function pdfToImages(pdfPath: string): string[] {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ocr-pdf-"));
-  const outputPrefix = path.join(tmpDir, "page");
-
-  execSync(`pdftoppm -png -r 200 "${pdfPath}" "${outputPrefix}"`, {
-    timeout: 30000,
-  });
-
-  // pdftoppm outputs page-1.png, page-2.png, etc.
-  return fs
-    .readdirSync(tmpDir)
-    .filter((f) => f.endsWith(".png"))
-    .sort()
-    .map((f) => path.join(tmpDir, f));
+function isPdf(urlOrPath: string): boolean {
+  const cleaned = urlOrPath.split("?")[0].split("#")[0];
+  return cleaned.toLowerCase().endsWith(".pdf");
 }
 
 /**
- * Build image content parts for the OpenAI Vision API.
- * For PDFs, converts to images first. Returns one or more content parts.
+ * Download a file from a URL and return its contents as a Buffer.
  */
-function buildImageParts(
+async function downloadFile(url: string): Promise<Buffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Build content parts for the OpenAI Chat API.
+ * - Images (local or remote) are sent as image_url parts.
+ * - PDFs are sent as file parts with base64 data (no pdftoppm needed).
+ */
+async function buildContentParts(
   fileUrlOrPath: string
-): OpenAI.Chat.Completions.ChatCompletionContentPart[] {
-  // Remote URL — send directly (works for image URLs)
-  if (
+): Promise<OpenAI.Chat.Completions.ChatCompletionContentPart[]> {
+  const isRemote =
     fileUrlOrPath.startsWith("http://") ||
-    fileUrlOrPath.startsWith("https://")
-  ) {
+    fileUrlOrPath.startsWith("https://");
+
+  // --- PDF handling (works on Vercel — no CLI tools needed) ---
+  if (isPdf(fileUrlOrPath)) {
+    let base64: string;
+    let filename: string;
+
+    if (isRemote) {
+      const buffer = await downloadFile(fileUrlOrPath);
+      base64 = buffer.toString("base64");
+      filename = fileUrlOrPath.split("/").pop()?.split("?")[0] || "document.pdf";
+    } else {
+      const absolutePath = path.resolve(fileUrlOrPath);
+      base64 = fs.readFileSync(absolutePath).toString("base64");
+      filename = path.basename(absolutePath);
+    }
+
+    return [
+      {
+        type: "file" as const,
+        file: {
+          file_data: `data:application/pdf;base64,${base64}`,
+          filename,
+        },
+      } as OpenAI.Chat.Completions.ChatCompletionContentPart,
+    ];
+  }
+
+  // --- Image handling ---
+  if (isRemote) {
     return [
       {
         type: "image_url",
@@ -55,25 +81,9 @@ function buildImageParts(
     ];
   }
 
+  // Local image file
   const absolutePath = path.resolve(fileUrlOrPath);
   const ext = path.extname(absolutePath).toLowerCase();
-
-  // PDF — convert to images first
-  if (ext === ".pdf") {
-    const imagePaths = pdfToImages(absolutePath);
-    return imagePaths.map((imgPath) => {
-      const base64 = fs.readFileSync(imgPath).toString("base64");
-      return {
-        type: "image_url" as const,
-        image_url: {
-          url: `data:image/png;base64,${base64}`,
-          detail: "high" as const,
-        },
-      };
-    });
-  }
-
-  // Regular image file
   const fileBuffer = fs.readFileSync(absolutePath);
   const base64 = fileBuffer.toString("base64");
 
@@ -120,7 +130,7 @@ Rules:
 export async function extractExpenseData(
   fileUrlOrPath: string
 ): Promise<ExtractedExpense[]> {
-  const imageParts = buildImageParts(fileUrlOrPath);
+  const contentParts = await buildContentParts(fileUrlOrPath);
 
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
@@ -134,7 +144,7 @@ export async function extractExpenseData(
             type: "text",
             text: "Extract all expense data from this document:",
           },
-          ...imageParts,
+          ...contentParts,
         ],
       },
     ],

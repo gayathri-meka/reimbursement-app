@@ -16,22 +16,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
   }
 
-  const documents = [];
+  try {
+    const documents = [];
 
-  for (const file of files) {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileUrl = await uploadFile(buffer, file.name, file.type);
+    for (const file of files) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileUrl = await uploadFile(buffer, file.name, file.type);
 
-    const doc = await prisma.document.create({
-      data: {
-        fileName: file.name,
-        fileUrl,
-        fileType: file.type,
-      },
-    });
+      const doc = await prisma.document.create({
+        data: {
+          fileName: file.name,
+          fileUrl,
+          fileType: file.type,
+        },
+      });
 
-    documents.push(doc);
+      documents.push(doc);
+    }
+
+    return NextResponse.json({ documents }, { status: 201 });
+  } catch (error) {
+    console.error("Upload failed:", error);
+    const message = error instanceof Error ? error.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ documents }, { status: 201 });
 }

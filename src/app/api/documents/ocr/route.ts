@@ -15,13 +15,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "fileUrl is required" }, { status: 400 });
   }
 
-  // Convert local URLs (e.g. /uploads/...) to absolute file paths
-  let resolvedPath = fileUrl;
-  if (fileUrl.startsWith("/uploads/")) {
-    resolvedPath = path.join(process.cwd(), "public", fileUrl);
+  try {
+    // Convert local URLs (e.g. /uploads/...) to absolute file paths
+    let resolvedPath = fileUrl;
+    if (fileUrl.startsWith("/uploads/")) {
+      resolvedPath = path.join(process.cwd(), "public", fileUrl);
+    }
+
+    const expenses = await extractExpenseData(resolvedPath);
+
+    return NextResponse.json({ expenses });
+  } catch (error) {
+    console.error("OCR extraction failed:", error);
+    const message = error instanceof Error ? error.message : "OCR extraction failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const expenses = await extractExpenseData(resolvedPath);
-
-  return NextResponse.json({ expenses });
 }
