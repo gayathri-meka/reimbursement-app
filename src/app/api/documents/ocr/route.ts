@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { getSession } from "@/lib/auth";
 import { extractExpenseData } from "@/lib/ocr";
+import { isSupabaseUrl, getSignedUrl } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -20,6 +21,9 @@ export async function POST(request: NextRequest) {
     let resolvedPath = fileUrl;
     if (fileUrl.startsWith("/uploads/")) {
       resolvedPath = path.join(process.cwd(), "public", fileUrl);
+    } else if (isSupabaseUrl(fileUrl)) {
+      // Private bucket — create a signed URL so we can download/access the file
+      resolvedPath = await getSignedUrl(fileUrl);
     }
 
     const expenses = await extractExpenseData(resolvedPath);

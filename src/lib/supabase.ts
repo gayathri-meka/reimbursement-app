@@ -62,6 +62,37 @@ function uploadToLocal(
   return `/uploads/${uniqueName}`;
 }
 
+/**
+ * Create a signed URL for a file in Supabase Storage.
+ * Works even when the bucket is private.
+ */
+export async function getSignedUrl(publicUrl: string): Promise<string> {
+  const supabase = getSupabaseAdmin();
+  const prefix = `/storage/v1/object/public/${BUCKET}/`;
+  const url = new URL(publicUrl);
+  const filePath = url.pathname.slice(url.pathname.indexOf(prefix) + prefix.length);
+
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(filePath, 300); // 5 minutes
+
+  if (error || !data?.signedUrl) {
+    throw new Error(`Failed to create signed URL: ${error?.message}`);
+  }
+
+  return data.signedUrl;
+}
+
+/**
+ * Check if a URL points to our Supabase Storage.
+ */
+export function isSupabaseUrl(url: string): boolean {
+  return (
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    url.startsWith(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  );
+}
+
 export async function uploadFile(
   file: Buffer,
   fileName: string,
