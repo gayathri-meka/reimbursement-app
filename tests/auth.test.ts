@@ -29,38 +29,38 @@ describe("Auth", () => {
   });
 
   describe("signToken / verifyToken", () => {
-    it("signs and verifies a JWT token", () => {
+    it("signs and verifies a JWT token", async () => {
       const payload = {
         employeeId: "test-id-123",
         email: "test@example.com",
         role: "EMPLOYEE",
       };
 
-      const token = signToken(payload);
+      const token = await signToken(payload);
       expect(token).toBeTruthy();
       expect(typeof token).toBe("string");
 
-      const decoded = verifyToken(token);
+      const decoded = await verifyToken(token);
       expect(decoded).not.toBeNull();
       expect(decoded!.employeeId).toBe(payload.employeeId);
       expect(decoded!.email).toBe(payload.email);
       expect(decoded!.role).toBe(payload.role);
     });
 
-    it("returns null for invalid token", () => {
-      const decoded = verifyToken("invalid-token-string");
+    it("returns null for invalid token", async () => {
+      const decoded = await verifyToken("invalid-token-string");
       expect(decoded).toBeNull();
     });
 
-    it("returns null for tampered token", () => {
-      const token = signToken({
+    it("returns null for tampered token", async () => {
+      const token = await signToken({
         employeeId: "id",
         email: "a@b.com",
         role: "ADMIN",
       });
       // Tamper with the token
       const tampered = token.slice(0, -5) + "XXXXX";
-      const decoded = verifyToken(tampered);
+      const decoded = await verifyToken(tampered);
       expect(decoded).toBeNull();
     });
   });

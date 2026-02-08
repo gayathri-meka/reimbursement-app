@@ -1,15 +1,21 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "./prisma";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const TOKEN_NAME = "auth-token";
+
+function getJwtSecret() {
+  return new TextEncoder().encode(
+    process.env.JWT_SECRET || "dev-secret-change-me"
+  );
+}
 
 export interface JwtPayload {
   employeeId: string;
   email: string;
   role: string;
+  [key: string]: unknown;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -23,13 +29,17 @@ export async function verifyPassword(
   return bcrypt.compare(password, hash);
 }
 
-export function signToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+export async function signToken(payload: JwtPayload): Promise<string> {
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("7d")
+    .sign(getJwtSecret());
 }
 
-export function verifyToken(token: string): JwtPayload | null {
+export async function verifyToken(token: string): Promise<JwtPayload | null> {
   try {
-    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const { payload } = await jwtVerify(token, getJwtSecret());
+    return payload as unknown as JwtPayload;
   } catch {
     return null;
   }
@@ -52,7 +62,6 @@ export async function getCurrentEmployee() {
 }
 
 export function setAuthCookie(token: string) {
-  // Returns cookie options for the response
   return {
     name: TOKEN_NAME,
     value: token,
