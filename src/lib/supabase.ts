@@ -4,7 +4,7 @@ import path from "path";
 
 let _supabaseAdmin: SupabaseClient | null = null;
 
-const BUCKET = "expense-documents";
+const BUCKET = "receipts";
 
 function isSupabaseConfigured(): boolean {
   return (
