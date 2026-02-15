@@ -14,13 +14,13 @@ describe("File Upload (local storage fallback)", () => {
     }
   });
 
-  it("uploads a PDF file and returns a local URL", async () => {
-    const samplePdf = path.join(process.cwd(), "samples", "bills", "bill1.pdf");
-    const buffer = fs.readFileSync(samplePdf);
+  it("uploads a JPEG file and returns a local URL", async () => {
+    const sampleJpeg = path.join(process.cwd(), "samples", "bills", "bill-1.jpeg");
+    const buffer = fs.readFileSync(sampleJpeg);
 
-    const url = await uploadFile(buffer, "test-bill.pdf", "application/pdf");
+    const url = await uploadFile(buffer, "test-bill.jpeg", "image/jpeg");
 
-    expect(url).toMatch(/^\/uploads\/.+test-bill\.pdf$/);
+    expect(url).toMatch(/^\/uploads\/.+test-bill\.jpeg$/);
     uploadedFiles.push(url);
 
     // Verify the file actually exists on disk
